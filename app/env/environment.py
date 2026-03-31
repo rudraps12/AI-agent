@@ -124,7 +124,7 @@ class EmailEnv:
     def state(self):
         return self.current_email
 
-    #  REWARD FUNCTION
+    #   REWARD FUNCTION
     def calculate_reward(self, action: Action):
         score = 0.0
         reason = ""
