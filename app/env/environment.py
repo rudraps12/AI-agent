@@ -2,6 +2,79 @@ import random
 from app.models.observation import Observation
 from app.models.action import Action
 from app.models.reward import Reward
+import re
+from datetime import datetime
+from app.models.reward import grade_task
+
+def get_task_type(email_text):
+    if "urgent" in email_text.lower():
+        return "priority"
+    elif "call" in email_text.lower() or "submit" in email_text.lower():
+        return "task_extraction"
+    else:
+        return "action_decision"
+    
+def grade_task(task_type, output):
+    if task_type == "task_extraction":
+        return 1.0 if output else 0.3
+
+    elif task_type == "priority":
+        return 1.0 if output in ["HIGH", "MEDIUM", "LOW"] else 0.2
+
+    elif task_type == "action_decision":
+        return 1.0 if output in ["reply", "escalate", "ignore"] else 0.2
+
+    return 0.0
+def extract_tasks_from_email(email_text):
+    tasks = []
+    text = email_text.lower()
+
+    # Split into sentences
+    sentences = re.split(r'[.!?]', text)
+
+    action_words = [
+        "send", "submit", "prepare", "update",
+        "complete", "finish", "review", "create",
+        "attend","write","solve"
+    ]
+    ignore_words = [
+        "you are informed","kindly ensure","all questions are",
+        "the assignment is"
+    ]
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+
+        if not sentence:
+            continue
+        
+
+        # Skip greetings
+        if sentence.startswith(("hi","hello", "thanks")):
+            continue
+        if any(phrase in sentence for phrase in ignore_words):
+            continue
+
+        # Extract action sentences
+        for word in action_words:
+            if word in sentence:
+                cleaned = sentence.replace("please","").replace("also","").replace("kindly","").strip()
+                tasks.append(cleaned)
+                break
+
+    # Deadline handling
+    if "deadline" in text:
+        tasks.append("complete before deadline")
+
+    unique_tasks = []
+    for t in tasks:
+        if t not in unique_tasks:
+            unique_tasks.append(t)
+
+    if "asap" in text or "urgent" in text:
+        tasks.append("handle urgently")
+        
+    return unique_tasks
 
 
 class EmailEnv:
@@ -26,37 +99,39 @@ class EmailEnv:
         ]
         return random.choice(emails)
 
-    #  TASK EXTRACTION
-    def extract_tasks(self, email: str):
-        tasks = []
-        email_lower = email.lower()
-
-        keywords = {
-            "meeting": "attend meeting",
-            "report": "send report",
-            "schedule": "schedule event",
-            "reschedule": "reschedule meeting",
-            "deadline": "complete before deadline",
-            "asap": "urgent task",
-            "reminder": "follow up"
-        }
-
-        for key, value in keywords.items():
-            if key in email_lower:
-                tasks.append(value)
-
-        return list(set(tasks))
 
     #  PRIORITY DETECTION
     def detect_priority(self, email: str):
         email_lower = email.lower()
 
+        # High priority words
         if "urgent" in email_lower or "asap" in email_lower:
             return "high"
-        elif "soon" in email_lower:
-            return "medium"
-        else:
-            return "low"
+
+        # 🔥 DATE DETECTION
+        date_match = re.search(r'(\d{1,2}[-/ ]?[a-zA-Z]+[-/ ]?\d{4})', email)
+
+        if date_match:
+            try:
+                deadline_str = date_match.group()
+
+                # Convert date format like "3-April-2026"
+                deadline_date = datetime.strptime(deadline_str, "%d-%B-%Y")
+
+                today = datetime.today()
+                diff = (deadline_date - today).days
+
+                if diff <= 2:
+                    return "high"
+                elif diff <= 5:
+                    return "medium"
+                else:
+                    return "low"
+
+            except:
+                pass
+
+        return "low"
 
     #  CONFLICT DETECTION
     def check_conflict(self, email: str):
@@ -70,7 +145,9 @@ class EmailEnv:
     def reset(self):
         email_text = self.generate_email()
 
-        self.tasks = self.extract_tasks(email_text)
+    # 🔥 NEW INTELLIGENT EXTRACTION
+        self.tasks = extract_tasks_from_email(email_text)
+
         self.priority = self.detect_priority(email_text)
 
         self.calendar = ["Meeting at 5 PM"]
@@ -82,19 +159,29 @@ class EmailEnv:
             history=self.history,
             current_tasks=self.tasks,
             calendar=self.calendar
-        )
+    )
 
         self.done = False
         return self.current_email
 
     #  STEP
     def step(self, action: Action):
-        reward = self.calculate_reward(action)
+    # Get task type
+        task_type = get_task_type(self.current_email.email)
 
-        # Save history
+    # Safe access
+        result = getattr(action, "content", "")
+
+    # Calculate reward
+        reward_score = grade_task(task_type, result)
+
+    # IMPORTANT: use simple value (not object)
+        reward = reward_score
+
+    # Save history
         self.history.append(self.current_email.email)
 
-        # Handle actions
+    # Handle actions
         if action.action_type == "reply":
             self.tasks = []
 
@@ -104,9 +191,9 @@ class EmailEnv:
         elif action.action_type == "ignore":
             pass
 
-        # Generate next email
+    # Generate next email
         next_email = self.generate_email()
-        self.tasks = self.extract_tasks(next_email)
+        self.tasks = extract_tasks_from_email(next_email)
 
         self.current_email = Observation(
             email=next_email,
@@ -118,6 +205,7 @@ class EmailEnv:
         )
 
         self.done = False
+
         return self.current_email, reward, self.done, {}
 
     #  STATE
@@ -164,5 +252,9 @@ class EmailEnv:
 
         if score == 0:
             reason = "Poor response."
+        
+        if len(self.tasks)>2:
+            score += 0.2
+            reason +="handled multiple tasks."
 
         return Reward(score=score, reason=reason)
