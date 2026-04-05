@@ -22,9 +22,9 @@ def reset():
 def step(data: dict):
     print("STEP: processing input")
 
-    email = data.get("email", "")
+    # FIXED LINE 👇
+    email = data.get("input", {}).get("email", "")
 
-    # Dummy logic (you can replace later)
     tasks = []
     if "meeting" in email.lower():
         tasks.append("Schedule meeting")
