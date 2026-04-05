@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 import uvicorn
 from pydantic import BaseModel
-
 from app.env.environment import EmailEnv, get_task_type
 from app.models.action import Action
 
@@ -21,6 +20,7 @@ def home():
 
 @app.post("/process")
 def process(request: EmailRequest):
+    
     try:
         email_text = request.email_text
 
