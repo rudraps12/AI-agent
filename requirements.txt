@@ -1,4 +1,4 @@
 gradio
 fastapi
 uvicorn
-pydantic
+openai

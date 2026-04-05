@@ -1,26 +1,37 @@
+import os
 from fastapi import FastAPI
-from pydantic import BaseModel
+from openai import OpenAI
 
 app = FastAPI()
+
+# Required env variables
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 
 @app.post("/reset")
 def reset():
+    print("START: reset called")
     return {"status": "ok"}
 
 
 @app.post("/step")
 def step(data: dict):
-    email = data.get("email","").lower()
+    print("STEP: processing input")
 
+    email = data.get("email", "")
+
+    # Dummy logic (you can replace later)
     tasks = []
-
-    if "meeting" in email:
+    if "meeting" in email.lower():
         tasks.append("Schedule meeting")
-    if "send" in email:
+    if "send" in email.lower():
         tasks.append("Send document")
-    if "urgent" in email:
-        tasks.append("Handle urgent issue")
+
+    print("END: returning output")
 
     return {
         "tasks": tasks,
