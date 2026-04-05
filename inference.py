@@ -4,18 +4,14 @@ from pydantic import BaseModel
 app = FastAPI()
 
 
-class EmailInput(BaseModel):
-    email: str
-
-
 @app.post("/reset")
 def reset():
     return {"status": "ok"}
 
 
 @app.post("/step")
-def step(data: EmailInput):
-    email = data.email.lower()
+def step(data: dict):
+    email = data.get("email","").lower()
 
     tasks = []
 
