@@ -71,4 +71,3 @@ with gr.Blocks(theme=gr.themes.Glass()) as demo:
 
     analyze_btn.click(process_email, inputs=email_input, outputs=output)
 
-demo.launch()

@@ -1,1 +1,3 @@
-from server.app import app
+from app.api.ui import demo
+
+demo.launch()
