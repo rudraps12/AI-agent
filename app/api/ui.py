@@ -49,6 +49,7 @@ Thanks for your message. Could you please provide more details?
 
 # 🔥 PREMIUM UI
 with gr.Blocks() as demo:
+    demo.theme = gr.themes.Glass()
 
     gr.Markdown("# ✉️ AI Email Triage System")
     gr.Markdown("Smart email analysis with task detection & priority scoring")
