@@ -104,19 +104,15 @@ class EmailEnv:
     def detect_priority(self, email: str):
         email_lower = email.lower()
 
-        # High priority words
-        if "urgent" in email_lower or "asap" in email_lower:
-            return "high"
-
         # 🔥 DATE DETECTION
-        date_match = re.search(r'(\d{1,2}[-/ ]?[a-zA-Z]+[-/ ]?\d{4})', email)
+        date_match = re.search(r'(\d{1,2}\s+[a-zA-Z]+\s+\d{4})', email)
 
         if date_match:
             try:
                 deadline_str = date_match.group()
 
                 # Convert date format like "3-April-2026"
-                deadline_date = datetime.strptime(deadline_str, "%d-%B-%Y")
+                deadline_date = datetime.strptime(deadline_str, "%d %B %Y")
 
                 today = datetime.today()
                 diff = (deadline_date - today).days
