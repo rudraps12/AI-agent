@@ -70,6 +70,22 @@ def _reward_scalar(reward_obj) -> float:
     return float(reward_obj)
 
 
+def _email_body_subject(obs: dict | None) -> tuple[str, str]:
+    """
+    observation.email may be a nested dict {body, subject, ...} or a plain string.
+    """
+    if not isinstance(obs, dict):
+        return "", ""
+    em = obs.get("email")
+    if isinstance(em, dict):
+        body = (em.get("body") or "") or ""
+        subj = (em.get("subject") or "") or ""
+        return body, subj
+    if isinstance(em, str):
+        return em, (obs.get("subject") or "") or ""
+    return "", ""
+
+
 def run_episode(task_name: str) -> float:
     """Must use task_name easy_task | medium_task | hard_task (see /reset)."""
     print("[START]", flush=True)
@@ -84,12 +100,9 @@ def run_episode(task_name: str) -> float:
     print(json.dumps(obs), flush=True)
     print("[END]", flush=True)
 
-    email = ""
-    subject = ""
+    email, subject = "", ""
     if isinstance(obs.get("observation"), dict):
-        em = obs["observation"].get("email") or {}
-        email = em.get("body", "") or ""
-        subject = em.get("subject", "") or ""
+        email, subject = _email_body_subject(obs["observation"])
 
     best = 0.50
     for step_idx in range(1, 4):
@@ -109,9 +122,11 @@ def run_episode(task_name: str) -> float:
             break
         nxt = result.get("observation", {})
         if isinstance(nxt, dict):
-            em = nxt.get("email") or {}
-            email = em.get("body", email) or email
-            subject = em.get("subject", subject) or subject
+            nb, ns = _email_body_subject(nxt)
+            if nb:
+                email = nb
+            if ns:
+                subject = ns
         time.sleep(0.2)
     return _clamp(best)
 
@@ -141,3 +156,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
