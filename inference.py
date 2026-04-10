@@ -6,24 +6,32 @@ It calls the environment API running at ENV_URL.
 import json
 import os
 import time
+
 import requests
 from openai import OpenAI
+
 ENV_URL = os.environ.get("ENV_URL", "https://rudraps12-openenv-email-triage-final.hf.space")
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME = os.environ.get("MODEL_NAME", "llama3-8b-8192")
-API_KEY = os.environ.get("API_KEY", os.environ.get("HF_TOKEN", os.environ.get("GROQ_API_KEY", "")))
+API_KEY = os.environ.get(
+    "API_KEY", os.environ.get("HF_TOKEN", os.environ.get("GROQ_API_KEY", ""))
+)
 client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
+
+
 def _clamp(v: float) -> float:
-    # Strict validator-safe range
+    """Strict validator-safe open interval (0, 1), excluding endpoints."""
     return round(max(0.01, min(float(v), 0.99)), 4)
+
+
 def call_llm(email: str, subject: str) -> dict:
     prompt = f"""You are an email triage agent.
 Subject: {subject}
 Email: {email}
 Respond in JSON only:
 {{
-  "action_type": "reply",
-  "content": "professional response mentioning all tasks, urgency, deadlines, and scheduling"
+ "action_type": "reply",
+ "content": "professional response mentioning all tasks, urgency, deadlines, and scheduling"
 }}"""
     try:
         resp = client.chat.completions.create(
@@ -51,20 +59,38 @@ Respond in JSON only:
                 "complete tasks by deadline, and update all stakeholders."
             ),
         }
-def run_episode(difficulty: str = None) -> float:
+
+
+def _reward_scalar(reward_obj) -> float:
+    """API returns reward as dict with 'total' (OpenEnv), not 'score'."""
+    if isinstance(reward_obj, dict):
+        return float(
+            reward_obj.get("total", reward_obj.get("score", 0.50))
+        )
+    return float(reward_obj)
+
+
+def run_episode(task_name: str) -> float:
+    """Must use task_name easy_task | medium_task | hard_task (see /reset)."""
     print("[START]", flush=True)
     try:
-        obs = requests.post(
+        obs = requests.get(
             f"{ENV_URL}/reset",
-            json={"difficulty": difficulty} if difficulty else {},
+            params={"task_name": task_name},
             timeout=30,
         ).json()
     except Exception:
-        obs = requests.get(f"{ENV_URL}/reset", timeout=30).json()
+        obs = {}
     print(json.dumps(obs), flush=True)
     print("[END]", flush=True)
-    email = obs.get("email", "")
-    subject = obs.get("subject", "")
+
+    email = ""
+    subject = ""
+    if isinstance(obs.get("observation"), dict):
+        em = obs["observation"].get("email") or {}
+        email = em.get("body", "") or ""
+        subject = em.get("subject", "") or ""
+
     best = 0.50
     for step_idx in range(1, 4):
         action = call_llm(email, subject)
@@ -72,9 +98,8 @@ def run_episode(difficulty: str = None) -> float:
             result = requests.post(f"{ENV_URL}/step", json=action, timeout=30).json()
         except Exception:
             result = {"reward": 0.50, "done": True, "observation": {}}
-        reward = result.get("reward", 0.50)
-        if isinstance(reward, dict):
-            reward = reward.get("score", 0.50)
+
+        reward = _reward_scalar(result.get("reward", 0.50))
         reward = _clamp(reward)
         best = max(best, reward)
         print(f"[STEP] step={step_idx} reward={reward}", flush=True)
@@ -84,22 +109,35 @@ def run_episode(difficulty: str = None) -> float:
             break
         nxt = result.get("observation", {})
         if isinstance(nxt, dict):
-            email = nxt.get("email", email)
-            subject = nxt.get("subject", subject)
+            em = nxt.get("email") or {}
+            email = em.get("body", email) or email
+            subject = em.get("subject", subject) or subject
         time.sleep(0.2)
     return _clamp(best)
+
+
 def main():
     print("[START]", flush=True)
     print(json.dumps({"status": "agent starting", "env_url": ENV_URL}), flush=True)
     print("[END]", flush=True)
     results = []
-    for diff in ["easy", "medium", "hard"]:
-        reward = run_episode(diff)
-        results.append({"difficulty": diff, "reward": reward})
-        print(f"[STEP] difficulty={diff} reward={reward}", flush=True)
+    tasks = [
+        ("easy", "easy_task"),
+        ("medium", "medium_task"),
+        ("hard", "hard_task"),
+    ]
+    for label, task_name in tasks:
+        reward = run_episode(task_name)
+        results.append({"difficulty": label, "reward": reward})
+        print(f"[STEP] difficulty={label} reward={reward}", flush=True)
     avg = _clamp(sum(r["reward"] for r in results) / len(results))
     print("[START]", flush=True)
-    print(json.dumps({"status": "complete", "results": results, "avg_reward": avg}), flush=True)
+    print(
+        json.dumps({"status": "complete", "results": results, "avg_reward": avg}),
+        flush=True,
+    )
     print("[END]", flush=True)
+
+
 if __name__ == "__main__":
     main()
