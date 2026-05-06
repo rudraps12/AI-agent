@@ -1,18 +1,18 @@
-def grade(action, task):
-    score = 0.0
+from app.models.reward import grade_task
 
-    content = action.content.lower()
+def grade(action, task: dict) -> float:
+    """Returns score strictly between 0 and 1."""
+    task_type = task.get("task_type", "action_decision")
+    output = getattr(action, "content", "") or ""
+    raw = grade_task(task_type, output)
+    return round(max(0.01, min(0.99, raw)), 4)
 
-    # Check action type
-    if action.action_type == task["expected_action"]:
-        score += 0.3
-
-    # Check keywords
-    matched = 0
-    for word in task["expected_keywords"]:
-        if word in content:
-            matched += 1
-
-    score += 0.7 * (matched / len(task["expected_keywords"]))
-
-    return round(score, 2)
+def grade_all_tasks(action) -> dict:
+    from app.tasks.easy import easy
+    from app.tasks.medium import medium
+    from app.tasks.hard import hard
+    tasks = {"easy": easy(), "medium": medium(), "hard": hard()}
+    return {
+        name: {"score": grade(action, t), "description": t["description"]}
+        for name, t in tasks.items()
+    }

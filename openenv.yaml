@@ -1,0 +1,71 @@
+name: openenv-email-triage
+description: >
+  A production-ready OpenEnv environment simulating professional email triage
+  and response automation. An AI agent reads incoming emails, classifies them,
+  generates replies, schedules follow-ups, and escalates to humans when needed.
+version: "1.0.0"
+entrypoint: "uvicorn app.main:app --host 0.0.0.0 --port 7860"
+author: "openenv-email-triage"
+
+environment:
+  observation_space:
+    thread_id: string
+    email:
+      message_id: string
+      sender: string
+      subject: string
+      body: string
+      timestamp: string
+      is_reply: boolean
+    sender: string
+    history: list[EmailMessage]
+    category: "spam|meeting|bug_report|customer_complaint|hr|production_issue|marketing|general|null"
+    priority: "low|medium|high|critical|null"
+    step_number: integer
+    max_steps: integer
+    task_name: string
+
+  action_space:
+    action_type: "classify|reply|schedule|escalate|archive|mark_spam"
+    content: string
+    metadata: dict
+
+  reward:
+    range: [-1.0, 1.0]
+    components:
+      classification: 0.30
+      reply: 0.40
+      scheduling: 0.15
+      escalation: 0.15
+    penalties:
+      loop: -0.10
+      wrong_classification: -0.20
+      destructive_action: -0.10
+
+tasks:
+  - name: easy_task
+    description: Classify a single email (spam vs important)
+    max_score: 0.30
+    required_actions: [classify]
+
+  - name: medium_task
+    description: Classify the email and write a professional reply
+    max_score: 0.70
+    required_actions: [classify, reply]
+
+  - name: hard_task
+    description: >
+      Process a multi-message email thread:
+      classify → reply → schedule follow-up → escalate if needed
+    max_score: 0.9999
+    required_actions: [classify, reply, schedule, escalate]
+
+api:
+  base_url: "http://localhost:7860"
+  endpoints:
+    - GET /reset
+    - POST /step
+    - GET /state
+    - GET /tasks
+    - GET /baseline
+    - POST /grader
