@@ -72,3 +72,7 @@ with gr.Blocks() as demo:
 
     analyze_btn.click(process_email, inputs=email_input, outputs=output)
 
+
+if __name__ == "__main__":
+    # Run from repo root: python -m app.api.ui
+    demo.launch(server_name="127.0.0.1", server_port=7860)

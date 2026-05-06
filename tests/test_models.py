@@ -6,7 +6,9 @@ obs = Observation(
     email="Meeting at 5 PM",
     sender="boss@company.com",
     subject="Urgent meeting",
-    history=[]
+    history=[],
+    current_tasks=["attend meeting"],
+    calendar=["Meeting at 5 PM"],
 )
 
 act = Action(

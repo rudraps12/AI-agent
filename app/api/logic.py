@@ -5,7 +5,7 @@ from app.models.action import Action
 from app.tasks.easy import easy
 from app.tasks.medium import medium
 from app.tasks.hard import hard
-from app.tasks.grader import grade
+from app.tasks.grader import grade as grade_action
 
 app = FastAPI()
 
@@ -49,7 +49,7 @@ def get_tasks():
 @app.post("/grader")
 def grader(action: Action):
     task = hard()
-    score = grader(action, task)
+    score = grade_action(action, task)
 
     return {
         "score": score,
