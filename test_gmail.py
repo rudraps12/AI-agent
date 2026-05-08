@@ -1,4 +1,4 @@
-from app.services.gmail_services import gmail_authenticate
+from app.services.gmail_service import gmail_authenticate
 
 service = gmail_authenticate()
 

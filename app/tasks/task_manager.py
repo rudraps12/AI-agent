@@ -11,10 +11,10 @@ def show_tasks():
 
     for index, task in enumerate(tasks):
         print(
-            f\"{index + 1}. "
-            f\"{task['task']} | "
-            f\"Priority: {task['priority']} | "
-            f\"Status: {task['status']}\"
+            f"{index + 1}. "
+            f"{task['task']} | "
+            f"Priority: {task['priority']} | "
+            f"Status: {task['status']}"
         )
 
     print('===============================\\n')

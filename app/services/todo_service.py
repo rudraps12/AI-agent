@@ -16,6 +16,10 @@ def get_tasks():
     return todos
 
 
+def clear_tasks():
+    todos.clear()
+
+
 def show_tasks():
 
     print("\n========== TODO LIST ==========")

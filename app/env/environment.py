@@ -30,7 +30,7 @@ def extract_tasks_from_email(email_text):
 
     text = email_text.lower()
 
-    sentences = re.split(r'[.!?\\n]', text)
+    sentences = re.split(r'[.!?\n]', text)
 
     action_words = [
         "send",
@@ -45,6 +45,7 @@ def extract_tasks_from_email(email_text):
         "write",
         "solve",
         "schedule",
+        "reschedule",
         "call",
         "reply"
     ]
@@ -80,6 +81,8 @@ def extract_tasks_from_email(email_text):
             if word in sentence:
                 cleaned = (
                     sentence
+                    .replace("urgent:", "")
+                    .replace("asap:", "")
                     .replace("please", "")
                     .replace("kindly", "")
                     .replace("also", "")
@@ -96,6 +99,11 @@ def extract_tasks_from_email(email_text):
 
     if "asap" in text or "urgent" in text:
         tasks.append("handle urgently")
+
+    tasks = list(set(tasks))
+
+    if not tasks:
+        return ["No task required"]
 
     return tasks
 
@@ -154,25 +162,77 @@ class EmailEnv:
             return "medium"
 
         # DATE DETECTION (e.g. "3 April 2026")
-        date_match = re.search(r"(\d{1,2}\s+[a-zA-Z]+\s+\d{4})", email)
+        # DATE DETECTION
+        deadline_keywords = [
+            "submit",
+            "deadline",
+            "due",
+            "before",
+            "last date",
+            "without fail",
+            "complete by"
+        ]
 
-        if date_match:
-            try:
-                deadline_str = date_match.group()
-                deadline_date = datetime.strptime(deadline_str, "%d %B %Y")
-                today = datetime.today()
-                diff = (deadline_date - today).days
+        sentences = re.split(r'[.!?\n]', email)
 
-                if diff <= 2:
-                    return "high"
-                if diff <= 5:
-                    return "medium"
-                return "low"
+        deadline_sentences = []
 
-            except Exception:
-                pass
+        for sentence in sentences:
 
-        return "low"
+            sentence_lower = sentence.lower()
+
+            if any(
+                keyword in sentence_lower
+                for keyword in deadline_keywords
+            ):
+                deadline_sentences.append(sentence)
+
+        date_patterns = [
+            ("%d %B %Y", r"(\d{1,2}\s+[a-zA-Z]+\s+\d{4})"),
+            ("%d-%m-%Y", r"(\d{1,2}-\d{1,2}-\d{4})"),
+            ("%d/%m/%Y", r"(\d{1,2}/\d{1,2}/\d{4})"),
+        ]
+
+        today = datetime.today().date()
+
+        for sentence in deadline_sentences:
+
+            for date_format, pattern in date_patterns:
+
+                date_match = re.search(
+                    pattern,
+                    sentence
+                )
+
+                if date_match:
+
+                    try:
+
+                        deadline_str = date_match.group()
+
+                        deadline_date = datetime.strptime(
+                            deadline_str,
+                            date_format
+                        ).date()
+
+                        diff = (
+                            deadline_date - today
+                        ).days
+                        
+                        if diff< 0:
+                            return "Deadline passed"
+
+                        elif diff <= 2:
+                            return "high"
+
+                        elif diff <= 5:
+                            return "medium"
+
+                        else:
+                            return "low"
+
+                    except Exception:
+                        pass
 
     #  CONFLICT DETECTION
     def check_conflict(self, email: str):

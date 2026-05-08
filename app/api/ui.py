@@ -1,78 +1,96 @@
 import gradio as gr
-from app.env.environment import EmailEnv, extract_tasks_from_email
 
-env = EmailEnv()
-
-
-def process_email(email_text):
-    try:
-        env.reset()
-
-        env.current_email.email = email_text
-        tasks = extract_tasks_from_email(email_text)
-        priority = env.detect_priority(email_text)
-
-        if tasks:
-            task_list = "\n".join([f"• {t}" for t in tasks])
-
-            response = f"""
-📧 Email Analysis
-
-🧠 Detected Tasks:
-{task_list}
-
-⚡ Priority: {priority}
-
-🤖 Suggested Reply:
-Thanks for your email. I will handle the following:
-{task_list}
-
-I'll keep you updated once completed.
-"""
-        else:
-            response = f"""
-📧 Email Analysis
-
-❌ No clear tasks detected
-
-⚡ Priority: {priority}
-
-🤖 Suggested Reply:
-Thanks for your message. Could you please provide more details?
-"""
-
-        return response
-
-    except Exception as e:
-        return f"❌ Error: {str(e)}"
+from app.api.logic import build_triage
 
 
-# 🔥 PREMIUM UI
-with gr.Blocks() as demo:
-    demo.theme = gr.themes.Glass()
+SAMPLE_EMAIL = """Urgent: please attend the project sync at 5 PM and send the release report ASAP.
+Also reschedule the client follow-up if there is a calendar conflict."""
 
-    gr.Markdown("# ✉️ AI Email Triage System")
-    gr.Markdown("Smart email analysis with task detection & priority scoring")
+
+def process_email(email_text, subject, sender):
+    email_text = (email_text or "").strip()
+    subject = (subject or "Inbox message").strip()
+    sender = (sender or "sender@example.com").strip()
+
+    if not email_text:
+        return (
+            "No email provided",
+            "low",
+            "archive",
+            "No clear action items found.",
+            "Paste an email to generate a reply.",
+        )
+
+    result = build_triage(email_text, subject=subject, sender=sender)
+    tasks = result["tasks"]
+    task_text = "\n".join(f"{index + 1}. {task}" for index, task in enumerate(tasks))
+    if not task_text:
+        task_text = "No clear action items found."
+
+    conflict_note = " Scheduling conflict detected." if result["has_conflict"] else ""
+    summary = (
+        f"From: {result['sender']}\n"
+        f"Subject: {result['subject']}\n"
+        f"Priority: {result['priority'].upper()}{conflict_note}"
+    )
+
+    return (
+        summary,
+        result["priority"],
+        result["recommended_action"],
+        task_text,
+        result["suggested_reply"],
+    )
+
+
+with gr.Blocks(title="OpenEnv Email Triage") as demo:
+    gr.Markdown("# OpenEnv Email Triage")
+    gr.Markdown("Analyze an email, extract tasks, rank priority, and draft a reply.")
 
     with gr.Row():
-        with gr.Column(scale=2):
+        with gr.Column(scale=3):
+            sender_input = gr.Textbox(label="Sender", value="boss@company.com")
+            subject_input = gr.Textbox(label="Subject", value="Work update")
             email_input = gr.Textbox(
-                label="📩 Enter Email",
-                placeholder="Paste your email here...",
-                lines=10
+                label="Email",
+                value=SAMPLE_EMAIL,
+                lines=10,
+                placeholder="Paste an email body here",
             )
-
-            analyze_btn = gr.Button("🚀 Analyze Email", variant="primary")
+            analyze_btn = gr.Button("Analyze Email", variant="primary")
 
         with gr.Column(scale=2):
-            output = gr.Textbox(
-                label="📊 Analysis Result",
-                lines=15
-            )
+            summary_output = gr.Textbox(label="Triage Summary", lines=4)
+            priority_output = gr.Label(label="Priority")
+            action_output = gr.Label(label="Recommended Action")
+            tasks_output = gr.Textbox(label="Detected Tasks", lines=7)
 
-    analyze_btn.click(process_email, inputs=email_input, outputs=output)
+    reply_output = gr.Textbox(label="Suggested Reply", lines=9)
+
+    analyze_btn.click(
+        process_email,
+        inputs=[email_input, subject_input, sender_input],
+        outputs=[
+            summary_output,
+            priority_output,
+            action_output,
+            tasks_output,
+            reply_output,
+        ],
+    )
+
+    demo.load(
+        process_email,
+        inputs=[email_input, subject_input, sender_input],
+        outputs=[
+            summary_output,
+            priority_output,
+            action_output,
+            tasks_output,
+            reply_output,
+        ],
+    )
 
 
 if __name__ == "__main__":
-    # Run from repo root: python -m app.api.ui
     demo.launch(server_name="127.0.0.1", server_port=7860)
