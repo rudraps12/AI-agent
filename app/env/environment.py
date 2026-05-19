@@ -4,6 +4,12 @@ from app.models.action import Action
 import re
 from datetime import datetime
 from app.models.reward import Reward, grade_task
+from app.services.calendar_service import (
+    create_calendar_event
+)
+from app.services.scheduler_service import (
+    schedule_deadline_calls
+)
 
 
 def get_task_type(email_text):
@@ -214,9 +220,22 @@ class EmailEnv:
                             deadline_str,
                             date_format
                         ).date()
+                        
+
+                        # CREATE CALENDAR EVENT
+                        create_calendar_event(
+                            title=sentence.strip(),
+                            deadline_date=deadline_str,
+                            description=email[:500]
+                        )
+                        
+                        schedule_deadline_calls(
+                            task_name=sentence.strip(),
+                            deadline_datetime=deadline_date
+                        )
 
                         diff = (
-                            deadline_date - today
+                            deadline_date.date() - today
                         ).days
                         
                         if diff< 0:
@@ -233,7 +252,7 @@ class EmailEnv:
 
                     except Exception:
                         pass
-
+        return "low"
     #  CONFLICT DETECTION
     def check_conflict(self, email: str):
         if "5 pm" in email.lower():
